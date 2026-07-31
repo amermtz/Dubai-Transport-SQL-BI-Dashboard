@@ -9,6 +9,7 @@ venv/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+.pytest_cache/
 
 # --- Data: keep the folders, ignore bulky/derived files ---
 # Raw source files are kept out of git by default. If a file is small enough

@@ -1,0 +1,3 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color
+007,RTA,M1,Red Line,1,E30613
+10,RTA,F1,Tram Line,0,

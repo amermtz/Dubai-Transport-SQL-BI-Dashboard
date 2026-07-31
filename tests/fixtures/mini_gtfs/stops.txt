@@ -1,0 +1,4 @@
+stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station
+0012,Platform A,25.2532,55.3657,0,STN1
+STN1,Union Station,25.2532,55.3657,1,
+0013,Platform B,25.2300,55.3200,0,STN1

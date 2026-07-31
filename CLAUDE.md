@@ -140,7 +140,7 @@ work down the documented fallbacks with the user.
 | 0 | Repo scaffold, docs, progress file | ✅ Done |
 | 1 | Data acquisition | ⛔ **Blocked on user** — see §4 |
 | 2 | Schema design + ER diagram, `sql/schema.sql` | ⬜ Not started — needs real columns |
-| 3 | Load pipeline (`scripts/load.py`) + cleaning | ⬜ Not started |
+| 3 | Load pipeline (`scripts/load_gtfs.py`) + cleaning | 🟡 **Skeleton written & tested** — see §8 (2026-07-31 Session 2). Runs only if Stage 1 lands GTFS. |
 | 4 | Analytical queries, `sql/queries.sql` | ⬜ Not started |
 | 5 | Tableau dashboard + publish to Tableau Public | ⬜ Not started |
 | 6 | Insights write-up, `reports/insights.md` | ⬜ Not started |
@@ -164,9 +164,15 @@ project3/
 │   ├── schema.sql                 # CREATE TABLEs, keys, constraints
 │   └── queries.sql                # analytical queries, each with its business question
 ├── scripts/
-│   └── load.py                    # raw -> MySQL loader
+│   ├── db.py                      # shared SQLAlchemy engine — ALL db code imports from here
+│   ├── gtfs_spec.py               # GTFS file/column map + type rules (data, not logic)
+│   └── load_gtfs.py               # GTFS -> MySQL loader; --inspect and --load modes
 ├── dashboard/
 │   └── screenshots/               # dashboard images for the README
+├── tests/
+│   ├── conftest.py                # puts scripts/ on sys.path; feed fixtures
+│   ├── test_load_gtfs.py          # loader regression tests — no DB needed
+│   └── fixtures/mini_gtfs/        # ⚠️ SYNTHETIC test feed. Not project data.
 ├── reports/
 │   └── insights.md                # the business write-up
 └── docs/
@@ -264,3 +270,96 @@ project3/
   if the two projects demonstrably answer different questions with different techniques —
   and never justify it with "the data was easier to find."
 - **Next:** user runs the two elevated commands in §3.1, then Step 6 (data sourcing).
+
+### 2026-07-31 — Session 2 (GTFS loader skeleton)
+
+Verified first that **nothing had changed on the machine since Session 1**: MySQL80 still
+`Manual`, no `D:\MySQL\Data`, no Tableau, `data/raw/` still empty. All three §3.1 actions
+are still outstanding. The 538 MB Tableau installer **is still cached** at the Temp path
+in §3.1 — Windows has not cleaned it, so no re-download is needed.
+
+Wrote the GTFS loader ahead of the data, on the grounds that GTFS **column names are a
+published standard**, so this is not the guessing that rule §7.2 forbids. Two files:
+
+- **`scripts/gtfs_spec.py`** — the file/column map as *data*: per file, its table, whether
+  the spec requires it, load order, and which columns are ids / times / dates / ints /
+  floats. Kept separate from the loader so `sql/schema.sql` can later be generated or
+  checked against it.
+- **`scripts/load_gtfs.py`** — `--inspect` (reports the feed's real contents, no DB access)
+  and `--load` (streams into existing tables, parents first).
+
+**Design decisions worth not relitigating:**
+
+1. **`--inspect` runs before any schema is written.** GTFS defines many optional columns
+   and every feed ships a different subset. The schema gets written against what the RTA
+   feed *actually has*, not against the standard in the abstract.
+2. **The loader refuses to create tables.** `pandas.to_sql` would infer all-TEXT columns
+   with no keys, constraints or indexes — which would silently throw away the
+   normalisation and ER modelling that is half of what this project is meant to evidence.
+   Missing tables produce an error naming them and pointing at `sql/schema.sql`.
+3. **Times are stored as seconds-after-midnight `INT`, not `TIME`.** This is the single
+   biggest GTFS trap. Times legally exceed 24:00:00 — `25:05:00` means 01:05 the next
+   morning but still on the *previous service day*. Any time-of-day parser either errors
+   or wraps, and wrapping turns a 75-minute trip into a negative duration. Seconds keep
+   the arithmetic correct; `hour_of_day = (secs DIV 3600) MOD 24` recovers the clock hour.
+4. **All `*_id` columns are forced to string.** Feeds use ids like `007` and `01`; pandas
+   infers int64 and strips the leading zeros, after which the joins silently under-match.
+5. **`stops.txt` is sorted stations-first before insert.** `parent_station` is a
+   self-referencing FK within one file and feeds do not order parents first — so a
+   correct final table can still fail on insert order alone.
+6. `encoding="utf-8-sig"`, because a BOM otherwise attaches to the first header and
+   renames the first column invisibly.
+
+**Tested end-to-end** against a throwaway fixture in the scratchpad (never in `data/raw/`,
+never committed — it is a code test, not project data). Confirmed against a scratch MySQL
+DB with the real FK constraints in place, including the self-FK on `stops`:
+`007` survived as text; `24:20:00` → `87600`; a cross-midnight trip measured **+75 min,
+not negative**; blanks became `NULL`; the platform-before-parent row ordering loaded
+cleanly; `--truncate` made re-runs idempotent (it truncates child-first with
+`FOREIGN_KEY_CHECKS=0`, session-scoped). Both feed forms work — `.zip` (including one
+nested in a top-level folder) and an extracted directory. The scratch DB was dropped;
+`dubai_transport` was never written to and is still empty.
+
+### 2026-07-31 — Session 2 (continued: tests)
+
+Promoted the throwaway fixture into permanent in-repo coverage: `tests/` with
+`conftest.py`, `test_load_gtfs.py` (**63 tests, all passing, ~0.7s**) and
+`tests/fixtures/mini_gtfs/`. Added `pytest>=8.0` to `requirements.txt`.
+
+Run with: `python -m pytest tests -q`
+
+**The tests need no database.** Everything they cover happens before MySQL is involved,
+which is precisely where GTFS data gets corrupted — and none of those failures raise.
+Leading zeros vanish, midnight wraps, dates become large integers: the load "succeeds"
+and the dashboard numbers are simply wrong. That is the case for testing this layer at all.
+
+⚠️ **`tests/fixtures/mini_gtfs/` is synthetic and is NOT project data.** It is committed,
+so the boundary matters: it exists only to exercise the loader, its `README.md` says so,
+and nothing in `reports/insights.md` may ever rest on it. This does not weaken rule §7.2 —
+a test double is not a fabricated dataset. Real data still comes from `data/raw/` with a
+citation.
+
+**Two things found by writing the tests, both now fixed:**
+
+1. **pandas 3.0.5 is installed, not 2.x.** pandas 3 made `str` the default dtype for text
+   columns, so the blank-to-NULL backstop in `coerce_frame` — guarded by
+   `dtype == object` — had silently stopped matching anything. Harmless in practice
+   (`na_values` already handles blanks on read) but it was dead code reading as live.
+   Now checks `is_string_dtype` as well. **Worth remembering: this project is on pandas 3,
+   where several dtype defaults differ from the 2.x behaviour most examples assume.**
+2. **A code comment was wrong.** It claimed that without `encoding="utf-8-sig"` a BOM
+   would corrupt the first column name. pandas' C parser strips the BOM anyway, so
+   `utf-8-sig` is insurance, not load-bearing. Comment corrected, and the test renamed to
+   `test_bom_does_not_corrupt_first_column` with a docstring stating it asserts the
+   invariant rather than guarding that setting.
+
+**Verified the suite actually fails on broken code** rather than just passing. Deliberately
+introduced five regressions; the tests caught four — time wrap-at-24h, id type inference,
+stops not reordered parents-first, dates left as strings. The fifth (BOM) was *missed*,
+which is what exposed finding 2 above. That check was a scratchpad throwaway and is not
+in the repo; re-do it by hand if the loader changes substantially.
+
+- **Next:** unchanged — the two elevated commands in §3.1, and **data sourcing is still
+  the only real blocker.** When a GTFS feed lands in `data/raw/`, the first command to
+  run is `python scripts/load_gtfs.py --inspect`; its output is what Stage 2's
+  `sql/schema.sql` gets written against.
