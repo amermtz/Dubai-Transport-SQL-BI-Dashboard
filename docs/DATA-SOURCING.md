@@ -43,7 +43,7 @@ schema and real joins — which is half of what this project is meant to prove.
 ⚠️ **Known risk:** when checked on 2026-07-31, `data.dubai/en/data-and-statistics`
 returned *"This page is under development / No data available"* to an unauthenticated
 request. It may well render properly once you are logged in. **If it doesn't, don't push
-on it — go to the fallbacks below.** Tell Claude what you see and we'll switch route.
+on it — go to the fallbacks below.**
 
 ---
 
@@ -94,15 +94,15 @@ the Overpass API: stations, lines, routes, coordinates.
 
 ## When the data lands
 
-Put files in `data/raw/`, then tell Claude:
+Put files in `data/raw/`, then record:
 
 - what you downloaded and **the exact source URL**
 - the **licence / terms of use** (needed for the README, and to decide whether the file
   can legally be committed to a public GitHub repo)
 - anything the portal said about field definitions or units
 
-Claude then inspects the real columns and starts Stage 2 — schema design, ER diagram,
-and the loader. **No schema will be written against guessed column names.**
+Stage 2 then begins against the real columns — schema design, ER diagram, and the
+loader. **No schema is written against guessed column names.**
 
 ---
 

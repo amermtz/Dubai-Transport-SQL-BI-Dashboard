@@ -1,8 +1,8 @@
 # Project 3 — SQL + Interactive BI Dashboard
 
-> Claude Code project brief. Give this file to Claude Code as context before starting.
-> This is the Data Analyst door-opener. It fills the single biggest gap in the current
-> skill set (BI tools) and matches analyst-posting language almost word for word.
+> Project brief. This is the Data Analyst door-opener. It fills the single biggest gap
+> in the current skill set (BI tools) and matches analyst-posting language almost word
+> for word.
 
 ## 1. Goal
 
