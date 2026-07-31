@@ -1,0 +1,35 @@
+# --- Secrets: never commit DB credentials ---
+.env
+*.cnf
+credentials.json
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# --- Data: keep the folders, ignore bulky/derived files ---
+# Raw source files are kept out of git by default. If a file is small enough
+# (< ~25 MB) and its licence permits redistribution, force-add it so the repo
+# is reproducible:  git add -f data/raw/<file>.csv
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+*.zip
+*.7z
+
+# --- Tableau working files ---
+*.twb.bak
+*.tde
+*.hyper
+Book*.twb
+
+# --- OS / editor ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
